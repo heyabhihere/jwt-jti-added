@@ -14,10 +14,18 @@ app.use(express.json())
 module.exports.postUsers = async (req, res) => {
     try {
         await validation.userSchema.validateAsync(req.body)
-        const hash_password = await bcrypt.hash(req.body.pass, 10);
-        req.body.pass = hash_password;
-        await user.create(req.body)
-        return res.json("User created")
+        const { email, phoneNum } = req.body;
+        const existingUser = await user.findOne({ $or: [{ email }, { phoneNum }] });
+
+        if (existingUser) {
+            return res.status(400).json({ msg: "user already exsit" })
+        }
+        else {
+            const hash_password = await bcrypt.hash(req.body.pass, 10);
+            req.body.pass = hash_password;
+            await user.create(req.body)
+            return res.json("User created")
+        }
     } catch {
         console.error(error)
         return res.status(400).json({
@@ -29,12 +37,14 @@ module.exports.postUsers = async (req, res) => {
 
 module.exports.deleteUser = async (req, res) => {
     try {
-
         const id = req.params.id;
-        await user.deleteOne({ _id: id });
-        return res.send({
-            msg: "User Deleted"
-        });
+        const userHaiJaNhi = await user.findOne({ _id: id })
+        if (userHaiJaNhi) {
+            await user.deleteOne({ _id: id });
+            return res.send({
+                msg: "User Deleted"
+            });
+        }
     } catch {
         console.error(error)
         return res.status(404).json({
@@ -50,16 +60,13 @@ module.exports.updateUser = async (req, res) => {
         await validation.updateSchema.validateAsync(req.body);
 
         const existinguser = await user.findOne(req.params)
-        console.log(existinguser, "---")
         if (!existinguser) {
             return res.status(404).json({
                 msg: "user not found"
             })
         }
         const filter = req.params;
-
         await user.findOneAndUpdate(filter, validatedUpdate);
-
         return res.json({
             msg: "updated"
         });
@@ -87,7 +94,6 @@ module.exports.getUsers = async (req, res) => {
 
 module.exports.getUser = async (req, res) => {
     try {
-
         const data = await user.find(req.params)
         return res.json(data)
     } catch (error) {
@@ -133,9 +139,15 @@ module.exports.addMarks = async (req, res) => {
 
 module.exports.loginUser = async (req, res) => {
     try {
-        const emailId = req.params.email;
+        const input = req.params.input;
         const password = req.params.pass;
-        const student = await user.findOne({ email: emailId });
+        let student;
+        if (input.includes('@')) {
+            student = await user.findOne({ email: input });
+        } else {
+            student = await user.findOne({ phoneNum: input });
+        }
+
         if (!student) {
             return res.status(404).json({ msg: "Student not found" });
         }
@@ -163,7 +175,6 @@ module.exports.loginUser = async (req, res) => {
 
 
 
-
 module.exports.loginUserToken = async (req, res) => {
     jwt.verify(req.token, secretkey, async (err, authData) => {
         if (err) {
@@ -179,7 +190,7 @@ module.exports.loginUserToken = async (req, res) => {
                     msg: "Profile accessed",
                     user: userData
                 })
-            }catch (error) {
+            } catch (error) {
                 console.error(error);
                 res.status(500).json({ msg: "Internal server error" });
             }
