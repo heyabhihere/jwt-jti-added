@@ -4,7 +4,7 @@ const { user } = require('../database/db');
 const bcrypt = require('bcrypt')
 const validation = require('../validation');
 const secretkey = "8989898988"
-const {v4:uuidv4}=require('uuid')
+const { v4: uuidv4 } = require('uuid')
 const jwt = require('jsonwebtoken')
 
 const marks = require('../database/marks')
@@ -140,7 +140,7 @@ module.exports.loginUser = async (req, res) => {
             return res.status(404).json({ msg: "Student not found" });
         }
         // Compare
-        bcrypt.compare(password, student.pass, function (err, result) {
+        bcrypt.compare(password, student.pass, async function (err, result) {
             if (err) {
                 console.error("Error comparing passwords:", err);
                 return res.status(500).json({ error: "Internal server error" });
@@ -148,14 +148,9 @@ module.exports.loginUser = async (req, res) => {
             if (result) {
                 // If passwords match
                 const uid = student._id;
-                const jti=uuidv4()
-                jwt.sign({ uid,jti }, secretkey, { expiresIn: '60s' }, (error, token) => {
-                    if (error) {
-                        console.error("Error generating token:", error);
-                        return res.status(500).json({ error: "Internal server error" });
-                    }
-                    res.json({ token });
-                });
+                const jti = uuidv4()
+                const token = await jwt.sign({ uid, jti }, secretkey)
+                res.json({ token });
             } else {
                 res.status(401).json({ msg: "Invalid password" });
             }
@@ -170,14 +165,24 @@ module.exports.loginUser = async (req, res) => {
 
 
 module.exports.loginUserToken = async (req, res) => {
-    jwt.verify(req.token, secretkey, (err, authData) => {
+    jwt.verify(req.token, secretkey, async (err, authData) => {
         if (err) {
             res.send({ msg: "invalid token" })
         } else {
-            res.send({
-                msg: "Profile accessed",
-                authData
-            })
+            try {
+                const userData = await user.findOne({ _id: authData.uid })
+                if (!userData) {
+                    return res.status(400).json({ msg: "user not found" })
+
+                }
+                res.json({
+                    msg: "Profile accessed",
+                    user: userData
+                })
+            }catch (error) {
+                console.error(error);
+                res.status(500).json({ msg: "Internal server error" });
+            }
         }
     })
 }
