@@ -6,7 +6,6 @@ const validation = require('../validation');
 const secretkey = "8989898988"
 const { v4: uuidv4 } = require('uuid')
 const jwt = require('jsonwebtoken')
-
 const marks = require('../database/marks')
 const app = express()
 app.use(express.json())
@@ -44,10 +43,12 @@ module.exports.deleteUser = async (req, res) => {
             return res.send({
                 msg: "User Deleted"
             });
+        }else{
+            return res.json({msg:"User does not exist."})
         }
     } catch {
         console.error(error)
-        return res.status(404).json({
+        return res.status(400).json({
             msg: "User not found"
         })
     }
@@ -61,8 +62,8 @@ module.exports.updateUser = async (req, res) => {
 
         const existinguser = await user.findOne(req.params)
         if (!existinguser) {
-            return res.status(404).json({
-                msg: "user not found"
+            return res.status(400).json({
+                msg: "user does not exist"
             })
         }
         const filter = req.params;
@@ -72,7 +73,7 @@ module.exports.updateUser = async (req, res) => {
         });
     } catch (error) {
         console.error(error)
-        return res.status(404).json({
+        return res.status(400).json({
             msg: "User not found"
         })
     }
@@ -85,7 +86,7 @@ module.exports.getUsers = async (req, res) => {
         return res.json({ users });
     } catch {
         console.error(error)
-        return res.status(404).json({
+        return res.status(400).json({
             msg: "Users not found"
         })
     }
@@ -94,11 +95,14 @@ module.exports.getUsers = async (req, res) => {
 
 module.exports.getUser = async (req, res) => {
     try {
-        const data = await user.find(req.params)
+        const data = await user.findOne(req.params)
+        if(!data){
+            return res.json({msg:"User doest not exist."})
+        }
         return res.json(data)
     } catch (error) {
         console.error(error)
-        return res.status(404).json({
+        return res.status(400).json({
             msg: "Users not found"
         })
     }
