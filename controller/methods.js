@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid')
 const jwt = require('jsonwebtoken')
 const marks = require('../database/marks')
 const app = express()
+const nodemailer = require('nodemailer')
 app.use(express.json())
 
 module.exports.postUsers = async (req, res) => {
@@ -23,7 +24,9 @@ module.exports.postUsers = async (req, res) => {
             const hash_password = await bcrypt.hash(req.body.pass, 10);
             req.body.pass = hash_password;
             await user.create(req.body)
+            sendEmail(req.body);
             return res.json("User created")
+
         }
     } catch {
         console.error(error)
@@ -32,6 +35,36 @@ module.exports.postUsers = async (req, res) => {
         })
     }
 };
+
+
+module.exports.getUsers = async (req, res) => {
+    try {
+        const users = await user.find({})
+        return res.json({ users });
+    } catch {
+        console.error(error)
+        return res.status(400).json({
+            msg: "Users not found"
+        })
+    }
+}
+
+
+module.exports.getUser = async (req, res) => {
+    try {
+        const data = await user.findOne(req.params)
+        if (!data) {
+            return res.json({ msg: "User doest not exist." })
+        }
+        return res.json(data)
+    } catch (error) {
+        console.error(error)
+        return res.status(400).json({
+            msg: "Users not found"
+        })
+    }
+}
+
 
 
 module.exports.deleteUser = async (req, res) => {
@@ -80,35 +113,6 @@ module.exports.updateUser = async (req, res) => {
 }
 
 
-module.exports.getUsers = async (req, res) => {
-    try {
-        const users = await user.find({})
-        return res.json({ users });
-    } catch {
-        console.error(error)
-        return res.status(400).json({
-            msg: "Users not found"
-        })
-    }
-}
-
-
-module.exports.getUser = async (req, res) => {
-    try {
-        const data = await user.findOne(req.params)
-        if (!data) {
-            return res.json({ msg: "User doest not exist." })
-        }
-        return res.json(data)
-    } catch (error) {
-        console.error(error)
-        return res.status(400).json({
-            msg: "Users not found"
-        })
-    }
-}
-
-
 module.exports.addMarks = async (req, res) => {
     try {
         await validation.addMarksSchema.validateAsync(req.body);
@@ -145,16 +149,16 @@ module.exports.loginUser = async (req, res) => {
         const phone = req.body.phonenum;
         const password = req.body.password;
         const dial = req.body.dialCode;
-        const email=req.body.email;
-        let student={};
-        if (dial===undefined && phone===undefined) {
-            const valid = await validation.validEmail.validateAsync({email:email})
+        const email = req.body.email;
+        let student = {};
+        if (dial === undefined && phone === undefined) {
+            const valid = await validation.validEmail.validateAsync({ email: email })
             if (!valid) {
                 return res.json({ msg: "Invalid email format" })
             }
             student = await user.findOne({ email: email });
         } else {
-            if (dial===undefined || dial !== "+91") {
+            if (dial === undefined || dial !== "+91") {
                 return res.json({ msg: "invalid dial code or dial code missing" })
             }
 
@@ -179,14 +183,13 @@ module.exports.loginUser = async (req, res) => {
                 } else {
                     res.status(401).json({ msg: "Invalid password" });
                 }
-            }); 
+            });
         }
     } catch (error) {
         console.error("Error generating token:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
-
 
 
 
@@ -201,8 +204,8 @@ module.exports.loginUserToken = async (req, res) => {
                     return res.status(400).json({ msg: "user not found" })
 
                 }
-                if(userData.jti !== authData.jti){
-                    return res.status(401).json({msg:"Invalid token"})
+                if (userData.jti !== authData.jti) {
+                    return res.status(401).json({ msg: "Invalid token" })
                 }
                 res.json({
                     msg: "Profile accessed",
@@ -217,4 +220,28 @@ module.exports.loginUserToken = async (req, res) => {
 }
 
 
+async function sendEmail(body) {
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'abhishekbansal824.bfc@gmail.com',
+            pass: 'obxwyhebnjrvkuly'
+        }
+    })
 
+    const mailOptions = {
+        from: 'abhishekbansal824.bfc@gmail.com',
+        to: body.email,
+        subject: 'Welcome to my API',
+        text: 'Your account has been created in my api.',
+    }
+
+
+    try {
+        const result = await transporter.sendMail(mailOptions);
+        console.log('Eamil sent successfully')
+    } catch (error) {
+        console.log('Email send failed with error:', error)
+    }
+
+}
