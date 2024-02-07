@@ -43,8 +43,8 @@ module.exports.deleteUser = async (req, res) => {
             return res.send({
                 msg: "User Deleted"
             });
-        }else{
-            return res.json({msg:"User does not exist."})
+        } else {
+            return res.json({ msg: "User does not exist." })
         }
     } catch {
         console.error(error)
@@ -96,8 +96,8 @@ module.exports.getUsers = async (req, res) => {
 module.exports.getUser = async (req, res) => {
     try {
         const data = await user.findOne(req.params)
-        if(!data){
-            return res.json({msg:"User doest not exist."})
+        if (!data) {
+            return res.json({ msg: "User doest not exist." })
         }
         return res.json(data)
     } catch (error) {
@@ -140,42 +140,53 @@ module.exports.addMarks = async (req, res) => {
 }
 
 
-
 module.exports.loginUser = async (req, res) => {
     try {
-        const input = req.params.input;
-        const password = req.params.pass;
-        let student;
-        if (input.includes('@')) {
-            student = await user.findOne({ email: input });
+        const phone = req.body.phonenum;
+        const password = req.body.password;
+        const dial = req.body.dialCode;
+        const email=req.body.email;
+        let student={};
+        if (dial===undefined && phone===undefined) {
+            const valid = await validation.validEmail.validateAsync({email:email})
+            if (!valid) {
+                return res.json({ msg: "Invalid email format" })
+            }
+            student = await user.findOne({ email: email });
         } else {
-            student = await user.findOne({ phoneNum: input });
+            if (dial===undefined || dial !== "+91") {
+                return res.json({ msg: "invalid dial code or dial code missing" })
+            }
+
+            student = await user.findOne({ phoneNum: phone });
         }
 
         if (!student) {
-            return res.status(404).json({ msg: "Student not found" });
+            return res.status(400).json({ msg: "Student not found" });
+        } else {
+            bcrypt.compare(password, student.pass, async function (err, result) {
+                if (err) {
+                    console.error("Error comparing passwords:", err);
+                    return res.status(500).json({ error: "Internal server error" });
+                }
+                if (result) {
+                    // If passwords match
+                    const uid = student._id;
+                    const jti = uuidv4()
+                    await user.updateOne({ _id: uid }, { $set: { jti: jti } });
+                    const token = await jwt.sign({ uid, jti }, secretkey)
+                    res.json({ token });
+                } else {
+                    res.status(401).json({ msg: "Invalid password" });
+                }
+            }); 
         }
-        // Compare
-        bcrypt.compare(password, student.pass, async function (err, result) {
-            if (err) {
-                console.error("Error comparing passwords:", err);
-                return res.status(500).json({ error: "Internal server error" });
-            }
-            if (result) {
-                // If passwords match
-                const uid = student._id;
-                const jti = uuidv4()
-                const token = await jwt.sign({ uid, jti }, secretkey)
-                res.json({ token });
-            } else {
-                res.status(401).json({ msg: "Invalid password" });
-            }
-        });
     } catch (error) {
         console.error("Error generating token:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
+
 
 
 
@@ -189,6 +200,9 @@ module.exports.loginUserToken = async (req, res) => {
                 if (!userData) {
                     return res.status(400).json({ msg: "user not found" })
 
+                }
+                if(userData.jti !== authData.jti){
+                    return res.status(401).json({msg:"Invalid token"})
                 }
                 res.json({
                     msg: "Profile accessed",
